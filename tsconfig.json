@@ -1,5 +1,6 @@
 {
   "include": ["./src"],
+  "exclude": ["./**/*.test.*"],
   "compilerOptions": {
     /* custom options */
     "plugins": [{ "transform": "@zerollup/ts-transform-paths" }],

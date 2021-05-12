@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "build": "ttsc -d",
-    "trace-import": "ttsc --traceResolution"
+    "build": "rm -rf ./dist && ttsc -d"
   },
   "repository": {
     "type": "git",
@@ -31,5 +30,11 @@
     "ts-jest": "^26.5.6",
     "ttypescript": "^1.5.12",
     "typescript": "^4.2.4"
+  },
+  "dependencies": {
+    "@types/peerjs": "^1.1.0",
+    "@types/react": "^17.0.5",
+    "peerjs": "^1.3.2",
+    "react": "^17.0.2"
   }
 }
