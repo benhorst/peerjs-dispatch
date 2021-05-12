@@ -4,7 +4,9 @@
   "description": "A method of syncing state via webRTC, host+peers, and dispatch actions",
   "main": "index.js",
   "scripts": {
-    "test": "test"
+    "test": "jest",
+    "build": "ttsc -d",
+    "trace-import": "ttsc --traceResolution"
   },
   "repository": {
     "type": "git",
@@ -21,5 +23,13 @@
   "bugs": {
     "url": "https://github.com/benhorst/peerjs-dispatch/issues"
   },
-  "homepage": "https://github.com/benhorst/peerjs-dispatch#readme"
+  "homepage": "https://github.com/benhorst/peerjs-dispatch#readme",
+  "devDependencies": {
+    "@types/jest": "^26.0.23",
+    "@zerollup/ts-transform-paths": "^1.7.18",
+    "jest": "^26.6.3",
+    "ts-jest": "^26.5.6",
+    "ttypescript": "^1.5.12",
+    "typescript": "^4.2.4"
+  }
 }
