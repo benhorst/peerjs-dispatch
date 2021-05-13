@@ -2,7 +2,10 @@
   "name": "peerjs-dispatch",
   "version": "0.0.1",
   "description": "A method of syncing state via webRTC, host+peers, and dispatch actions",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "files": [
+    "dist/*"
+  ],
   "scripts": {
     "test": "jest",
     "build": "rm -rf ./dist && ttsc -d"

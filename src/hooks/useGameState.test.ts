@@ -1,5 +1,17 @@
-import { useLobby } from "./useGameState";
+import {
+  useGameState,
+  useGameConnectionInfo,
+  useGameStateDispatch,
+} from "./useGameState";
 
 test("useGameState", () => {
-  expect(() => {}).not.toThrow();
+  expect(useGameState).not.toBeUndefined;
+});
+
+test("useGameConnectionInfo", () => {
+  expect(useGameConnectionInfo).not.toBeUndefined;
+});
+
+test("useGameStateDispatch", () => {
+  expect(useGameStateDispatch).not.toBeUndefined;
 });

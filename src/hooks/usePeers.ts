@@ -1,32 +1,18 @@
+import Peer from "peerjs";
 import { useState, useEffect, useReducer } from "react";
 
-const sanitizeId = (idString) => idString.replace(/[^A-Za-z0-9]/g, "");
+const sanitizeId = (idString: string) => idString.replace(/[^A-Za-z0-9]/g, "");
+const DEFAULT_HOST = sanitizeId("auth0|5f245f6c32cea302211421b0");
 
-interface DataConnectionMetadata {
-  clientId: string; // this is the id for the non-host
-  host: string; // id for the host
-}
-interface DataConnection {
-  send: (data: any) => void;
-  close: () => void;
-  on: (name: string, func: (data: any) => void) => void;
-  off: (name: string, func: (data: any) => void) => void;
-  open: boolean;
-  metadata: DataConnectionMetadata;
-  reliable: boolean;
-}
-
-interface Dictionary<T> {
-  [id: string]: T;
-}
+type Dictionary<T> = Record<string, T>;
 interface ConnectionReducerAction {
   type: "add" | "remove";
   payload: {
     id: string;
-    ref: DataConnection;
+    ref: Peer.DataConnection;
   };
 }
-type ConnectionMap = Dictionary<DataConnection>;
+type ConnectionMap = Dictionary<Peer.DataConnection>;
 type ConnectionMapReducer = (
   state: ConnectionMap,
   action: ConnectionReducerAction
@@ -49,6 +35,7 @@ const addRemoveListenerReducer: ListenerReducer = (state, action) => {
   } else if (action.type === "remove") {
     return state.filter((x) => x !== action.payload);
   }
+  return state;
 };
 const connectionReducer: ConnectionMapReducer = (state, action) => {
   const { ref, id } = action.payload;
@@ -64,12 +51,16 @@ const connectionReducer: ConnectionMapReducer = (state, action) => {
   return state;
 };
 
-const defaultHost = sanitizeId("auth0|5f245f6c32cea302211421b0");
-export const usePeers = (inId: string, hostIn: string = defaultHost) => {
-  const id = sanitizeId(inId);
+export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
+  const id = sanitizeId(myPeerId);
+  const [peer, setPeer] = useState<any>(null);
+  useEffect(() => {
+    const peerRef = new Peer(id);
+    setPeer(peerRef);
+  }, [id]);
+
   const host = sanitizeId(hostIn);
-  const [peer, setPeer] = useState(null);
-  const [connected, setConnected] = useState(null);
+  const [connected, setConnected] = useState<boolean>(false);
   const [connections, dispatchConnections] = useReducer(connectionReducer, {});
   const [listeners, dispatchListeners] = useReducer(
     addRemoveListenerReducer,
@@ -87,44 +78,35 @@ export const usePeers = (inId: string, hostIn: string = defaultHost) => {
     }
   }, [hasHostConnection]);
 
-  const addListener = (func) =>
+  const addListener = (func: Listener) =>
     dispatchListeners({
       type: "add",
       payload: func,
     });
-  const removeListener = (func) =>
+  const removeListener = (func: Listener) =>
     dispatchListeners({
       type: "remove",
       payload: func,
     });
 
-  const internalBroadcast = (fromId, payload) => {
+  const internalBroadcast = (fromId: string, payload: any) => {
     Object.entries(connections).forEach(([id, connection]) => {
       if (id === fromId) {
-        console.log("not rebroadcasting message to", id);
+        console.log("not rebroadcasting message to sender: ", id);
       } else {
-        console.log("sending message to ", id, payload);
+        console.log("sending message to: ", id, payload);
         connection.send(payload);
       }
     });
   };
   // this is what we typically surface in the hook.
-  const broadcast = (payload) => internalBroadcast(id, payload);
-
-  useEffect(() => {
-    console.log("import peer effect");
-    (async () => {
-      const Peer = (await import("peerjs")).default;
-      const peerRef = new Peer(id);
-      setPeer(peerRef);
-    })();
-  }, []);
+  const broadcast = (payload: any) => internalBroadcast(id, payload);
 
   // whenever peer ref changes, attempt to open connection to main server
   useEffect(() => {
     console.log("open conn effect");
     if (!peer) return;
-    peer.on("open", (pid) => {
+    peer.on("open", (pid: string) => {
       setConnected(true);
       console.log("opened connection with id: ", pid);
       // connect to host
@@ -141,7 +123,7 @@ export const usePeers = (inId: string, hostIn: string = defaultHost) => {
       // but maybe set up reconnecting?
       return; // probably nothing to do in this case? when we DC?
     }
-    const onConnection = (conn) => {
+    const onConnection = (conn: Peer.DataConnection) => {
       // conn.peer -> the PeerJS id
       // conn.metadata -> set by connector (can be our definition)
       // conn.label -> set by connector (can be our regular def)
@@ -192,7 +174,7 @@ export const usePeers = (inId: string, hostIn: string = defaultHost) => {
           message: "hello!",
         });
       });
-      hc.on("data", (data) => {
+      hc.on("data", (data: any) => {
         listeners.forEach((f) => f(data));
       });
       // there needs to be some sort of reconnect logic where it
@@ -207,6 +189,7 @@ export const usePeers = (inId: string, hostIn: string = defaultHost) => {
         });
       });
     }
+    // TODO: add this logic to window.onunload as well
     return () => {
       console.log("cleaning up all connections and handlers");
       peer.off("connection", onConnection);
