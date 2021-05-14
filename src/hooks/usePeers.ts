@@ -1,18 +1,58 @@
-import Peer from "peerjs";
 import { useState, useEffect, useReducer } from "react";
+import produce from "immer";
 
 const sanitizeId = (idString: string) => idString.replace(/[^A-Za-z0-9]/g, "");
 const DEFAULT_HOST = sanitizeId("auth0|5f245f6c32cea302211421b0");
+
+const isClient =
+  typeof window !== "undefined" &&
+  window.document &&
+  window.document.createElement;
+
+const MockPeerModule = {
+  default: function () {},
+};
+// shamelessly borrowed.
+interface DataConnection {
+  send(data: any): void;
+  close(): void;
+  on(event: string, cb: () => void): void;
+  on(event: "data", cb: (data: any) => void): void;
+  on(event: "open", cb: () => void): void;
+  on(event: "close", cb: () => void): void;
+  on(event: "error", cb: (err: any) => void): void;
+  off(event: string, fn: Function, once?: boolean): void;
+  dataChannel: RTCDataChannel;
+  label: string;
+  metadata: any;
+  open: boolean;
+  peerConnection: RTCPeerConnection;
+  peer: string;
+  reliable: boolean;
+  serialization: string;
+  type: string;
+  bufferSize: number;
+  stringify: (data: any) => string;
+  parse: (data: string) => any;
+}
+
+const getPeerLibrary = async () => {
+  let peerRef: any = MockPeerModule;
+  if (isClient) {
+    peerRef = await import("peerjs");
+  }
+  return peerRef.default;
+};
 
 type Dictionary<T> = Record<string, T>;
 interface ConnectionReducerAction {
   type: "add" | "remove";
   payload: {
     id: string;
-    ref: Peer.DataConnection;
+    ref: DataConnection;
   };
 }
-type ConnectionMap = Dictionary<Peer.DataConnection>;
+type ConnectionMap = Dictionary<DataConnection>;
 type ConnectionMapReducer = (
   state: ConnectionMap,
   action: ConnectionReducerAction
@@ -37,26 +77,25 @@ const addRemoveListenerReducer: ListenerReducer = (state, action) => {
   }
   return state;
 };
-const connectionReducer: ConnectionMapReducer = (state, action) => {
+const connectionReducer: ConnectionMapReducer = produce((state, action) => {
   const { ref, id } = action.payload;
   if (action.type === "add") {
-    state = {
-      ...state,
-      [id]: ref,
-    };
+    state[id] = ref;
   } else if (action.type === "remove") {
-    state = { ...state };
     delete state[id];
   }
-  return state;
-};
+  return;
+});
 
 export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
   const id = sanitizeId(myPeerId);
   const [peer, setPeer] = useState<any>(null);
   useEffect(() => {
-    const peerRef = new Peer(id);
-    setPeer(peerRef);
+    (async () => {
+      const Peer = await getPeerLibrary();
+      const peerRef = new Peer(id);
+      setPeer(peerRef);
+    })();
   }, [id]);
 
   const host = sanitizeId(hostIn);
@@ -67,16 +106,17 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
     []
   );
 
-  const [reconnectAttempt, setReconnectAttempt] = useState(0);
-  const hasHostConnection = !!connections[host];
+  // const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
-  useEffect(() => {
-    if (!hasHostConnection) {
-      setTimeout(() => {
-        setReconnectAttempt(reconnectAttempt + 1);
-      }, 2500);
-    }
-  }, [hasHostConnection]);
+  //const hasHostConnection = !!connections[host];
+  // TODO: there's definitely something harmful going on here.
+  // useEffect(() => {
+  //   if (!hasHostConnection) {
+  //     setTimeout(() => {
+  //       setReconnectAttempt(reconnectAttempt + 1);
+  //     }, 2500);
+  //   }
+  // }, [hasHostConnection]);
 
   const addListener = (func: Listener) =>
     dispatchListeners({
@@ -90,6 +130,8 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
     });
 
   const internalBroadcast = (fromId: string, payload: any) => {
+    if (Object.entries(connections).length === 0)
+      console.log("no connections to send message to", payload);
     Object.entries(connections).forEach(([id, connection]) => {
       if (id === fromId) {
         console.log("not rebroadcasting message to sender: ", id);
@@ -104,7 +146,7 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
 
   // whenever peer ref changes, attempt to open connection to main server
   useEffect(() => {
-    console.log("open conn effect");
+    console.log("open conn effect", !!peer);
     if (!peer) return;
     peer.on("open", (pid: string) => {
       setConnected(true);
@@ -123,7 +165,7 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
       // but maybe set up reconnecting?
       return; // probably nothing to do in this case? when we DC?
     }
-    const onConnection = (conn: Peer.DataConnection) => {
+    const onConnection = (conn: DataConnection) => {
       // conn.peer -> the PeerJS id
       // conn.metadata -> set by connector (can be our definition)
       // conn.label -> set by connector (can be our regular def)
@@ -145,7 +187,6 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
       conn.on("data", (data) => {
         console.log("got data over connection ", conn.peer, data);
         listeners.forEach((f) => f(data));
-        internalBroadcast(conn.peer, data);
       });
     };
 
@@ -154,11 +195,11 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
       // first, listen for new connections from other peers
       peer.on("connection", onConnection);
     } else {
+      console.log("attempting to connect to host");
       const hc = peer.connect(host, {
         reliable: true,
         metadata: { clientId: peer.id, host },
       });
-      console.log("sending hello to ", host);
       hc.on("open", () => {
         dispatchConnections({
           type: "add",
@@ -168,7 +209,8 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
           },
         });
         // say hello from me.
-        internalBroadcast(id, {
+        console.log("sending hello to ", host);
+        hc.send({
           clientId: id,
           type: "hello",
           message: "hello!",
@@ -180,6 +222,7 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
       // there needs to be some sort of reconnect logic where it
       // tries to always have a host connection open.
       hc.on("close", () => {
+        console.log("dropped connection to host ", host);
         dispatchConnections({
           type: "remove",
           payload: {
@@ -199,13 +242,13 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
         connection.close();
       });
     };
-  }, [connected, reconnectAttempt, host]);
+  }, [connected, /*reconnectAttempt, */ host]);
 
   return {
     connected,
     broadcast,
     addListener,
     removeListener,
-    connections: Object.keys(connections),
+    connections: connections,
   };
 };

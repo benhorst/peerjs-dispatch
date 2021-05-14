@@ -1,12 +1,46 @@
 import React, {
   Reducer,
-  useState,
+  useReducer,
   useEffect,
-  createContext,
   ProviderProps,
+  createContext,
   useContext,
 } from "react";
 import { usePeers } from "./usePeers";
+
+export const GameStateSyncContext = createContext({});
+export const GameStateSyncDispatchContext = createContext({});
+export const GameConnectionContext = createContext({});
+
+export const useGameState = () => useContext(GameStateSyncContext);
+export const useGameStateDispatch = () =>
+  useContext(GameStateSyncDispatchContext);
+export const useGameConnectionInfo = () => useContext(GameConnectionContext);
+
+export const PlayerConnectionReadout = () => {
+  const state = useGameConnectionInfo() as {
+    connected: boolean;
+    connections: Record<string, any>;
+    host: string;
+  };
+
+  return (
+    <pre style={{ maxHeight: "500px", overflowY: "auto", overflowX: "auto" }}>
+      connected: {state.connected} / host: {state.host}
+      <br />
+      connections: {Object.keys(state.connections).join(", ")}
+    </pre>
+  );
+};
+export const GameStateReadout = () => {
+  const state = useGameState();
+
+  return (
+    <pre style={{ maxHeight: "500px", overflowY: "auto", overflowX: "auto" }}>
+      {JSON.stringify(state, null, 2)}
+    </pre>
+  );
+};
 
 /*
 GOALS:
@@ -29,10 +63,6 @@ const MyComponent = () => {
 
 // const getStateFromId = fetch()
 
-const GameStateSyncContext = createContext({});
-const GameStateSyncDispatchContext = createContext({});
-const GameConnectionContext = createContext({});
-
 interface IdObject {
   id: string;
 }
@@ -51,6 +81,7 @@ type GameStateReducerAction<
 
 type PeerMessage = {
   type: "gamestate.update" | "hello" | "info";
+  clientId?: string;
   action: {
     type: string;
     payload: any;
@@ -77,51 +108,50 @@ export const GameStateSyncProvider = <T extends GameStateObject, A>({
   ...props
 }: GameStateSyncProviderProps<T>) => {
   // critically, there needs to be an initial value provided here.
-  const [gameState, setGameState] = useState<T>(value);
-  const { host } = gameState;
+  const { host } = value;
+  const { client: clientReducer, host: hostReducer } = stateReducers;
+  const theReducer = host === peerId ? hostReducer : clientReducer;
+
+  const [gameState, dispatchGameState] = useReducer(theReducer, value);
   const { connected, broadcast, addListener, removeListener, connections } =
     usePeers(peerId, host);
 
   // a dispatch to give to consumers
-  const { client: clientReducer, host: hostReducer } = stateReducers;
   const externalDispatch = (action: GameStateReducerAction) => {
-    // if this is the host, we want to act as server
-    const theReducer = host === peerId ? hostReducer : clientReducer;
-    const newState = theReducer(gameState, action);
-    // update optimistically locally by changing the system of record
-    setGameState(newState);
-
-    // if server dispatch is anything but explicitly false,
-    // (aka setting action.serverDispatch=false forces regular lobby actions, otherwise it is a host update)
-    if (action.hostDispatch !== false) {
-      // tell everyone what the new (full!) state is
-      if (host === peerId) {
-        broadcast({
-          type: "lobby-action",
-          action: {
-            type: "server.update",
-            payload: newState,
-          },
-        });
-        // TODO: writeback to a canonical state if required.
-      } else {
-        // send the host the action you done did.
-        broadcast({
-          type: "lobby-action",
-          action,
-        });
-      }
+    console.log("external dispatch", action);
+    dispatchGameState(action);
+    // send the host the action you done did.
+    if (host !== peerId) {
+      broadcast({
+        type: "gamestate.update",
+        action,
+      });
     }
   };
+  useEffect(() => {
+    if (host === peerId) {
+      broadcast({
+        type: "gamestate.update",
+        action: {
+          type: "host.update",
+          payload: gameState,
+        },
+      });
+    }
+  }, [gameState, connections]);
 
   const peerListener = (message: PeerMessage) => {
     if (message.type === "gamestate.update") {
       console.log("received game state update from peer ", message);
       externalDispatch(message.action);
     } else if (message.type === "hello") {
-      externalDispatch({
-        type: "server.update",
-        payload: gameState,
+      console.log("just saying hello from: ", message.clientId);
+      broadcast({
+        type: "gamestate.update",
+        action: {
+          type: "host.update",
+          payload: gameState,
+        },
       });
     } else {
       console.log("received debug message from peer ", message);
@@ -130,7 +160,7 @@ export const GameStateSyncProvider = <T extends GameStateObject, A>({
   useEffect(() => {
     addListener(peerListener);
     return () => removeListener(peerListener);
-  }, []);
+  }, [gameState]);
 
   return (
     <GameStateSyncContext.Provider value={gameState}>
@@ -142,29 +172,5 @@ export const GameStateSyncProvider = <T extends GameStateObject, A>({
         </GameConnectionContext.Provider>
       </GameStateSyncDispatchContext.Provider>
     </GameStateSyncContext.Provider>
-  );
-};
-
-export const useGameState = () => useContext(GameStateSyncContext);
-export const useGameStateDispatch = () =>
-  useContext(GameStateSyncDispatchContext);
-export const useGameConnectionInfo = () => useContext(GameConnectionContext);
-
-export const PlayerConnectionReadout = () => {
-  const state = useGameConnectionInfo();
-
-  return (
-    <pre style={{ maxHeight: "500px", overflowY: "auto", overflowX: "auto" }}>
-      {JSON.stringify(state, null, 2)}
-    </pre>
-  );
-};
-export const GameStateReadout = () => {
-  const state = useGameState();
-
-  return (
-    <pre style={{ maxHeight: "500px", overflowY: "auto", overflowX: "auto" }}>
-      {JSON.stringify(state, null, 2)}
-    </pre>
   );
 };
