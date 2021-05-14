@@ -1,5 +1,5 @@
 {
-  "name": "peerjs-dispatch",
+  "name": "@benhorst/peerjs-dispatch",
   "version": "0.0.3",
   "description": "A method of syncing state via webRTC, host+peers, and dispatch actions",
   "main": "dist/index.js",
