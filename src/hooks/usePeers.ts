@@ -188,6 +188,20 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
         console.log("got data over connection ", conn.peer, data);
         listeners.forEach((f) => f(data));
       });
+      // if the connection closes, remove it.
+      conn.on("close", () => {
+        dispatchConnections({
+          type: "remove",
+          payload: {
+            ref: conn,
+            id: conn.peer,
+          },
+        });
+      });
+      // if the connection closes, remove it.
+      conn.on("error", (err) => {
+        console.warn("RTC Error on connection:", id, err);
+      });
     };
 
     if (id === host) {
