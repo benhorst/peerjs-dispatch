@@ -106,17 +106,75 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
     []
   );
 
-  // const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [hostDisconnected, setHostDisconnected] = useState(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const connectToHost = () => {
+    console.debug(
+      `usePeer attempting to connect to host ${host}, reconnect: ${reconnectAttempt}`
+    );
+    const hc: DataConnection = peer.connect(host, {
+      reliable: true,
+      metadata: { clientId: peer.id, host },
+    });
+    setTimeout(() => {
+      if (hc.open === false) {
+        setHostDisconnected(true);
+      }
+    }, 2500);
+    hc.on("open", () => {
+      setReconnectAttempt(0);
+      console.debug(
+        `usePeer RTCEvent(open): RTC host connection opened to ${host}. Saying hello as ${id}`
+      );
+      dispatchConnections({
+        type: "add",
+        payload: {
+          ref: hc,
+          id: host,
+        },
+      });
+      // say hello from me.
+      hc.send({
+        clientId: id,
+        type: "hello",
+        message: "hello!",
+      });
+    });
+    hc.on("data", (data: any) => {
+      console.debug(`usePeer RTCEvent(data)`, data);
+      listeners.forEach((f) => f(data));
+    });
+    // there needs to be some sort of reconnect logic where it
+    // tries to always have a host connection open.
+    hc.on("close", () => {
+      console.warn(
+        `usePeer RTCEvent(close): RTC lost host connection to ${host}.`
+      );
+      setHostDisconnected(true);
+      dispatchConnections({
+        type: "remove",
+        payload: {
+          ref: hc,
+          id: host,
+        },
+      });
+    });
+    hc.on("error", (err) => {
+      console.warn(`usePeer RTCEvent(error): on connection to ${host}.`, err);
+    });
+  };
 
-  //const hasHostConnection = !!connections[host];
-  // TODO: there's definitely something harmful going on here.
-  // useEffect(() => {
-  //   if (!hasHostConnection) {
-  //     setTimeout(() => {
-  //       setReconnectAttempt(reconnectAttempt + 1);
-  //     }, 2500);
-  //   }
-  // }, [hasHostConnection]);
+  // TODO: get this to happen a few times.
+  useEffect(() => {
+    if (hostDisconnected) {
+      setHostDisconnected(false);
+      setTimeout(() => {
+        setReconnectAttempt(reconnectAttempt + 1);
+        setHostDisconnected(false);
+        connectToHost();
+      }, 2500);
+    }
+  }, [hostDisconnected]);
 
   const addListener = (func: Listener) =>
     dispatchListeners({
@@ -171,10 +229,11 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
       // conn.label -> set by connector (can be our regular def)
       // conn.connectionId -> unique id provided by server
       // conn.dataChannel -> potentially useful?
-      console.log("new connection from ", conn.peer);
+      console.debug(`RTC: new connection event from ${conn.peer}`);
 
       // when it opens up, save it.
       conn.on("open", () => {
+        console.debug(`usePeer RTCEvent(open): ${conn.peer}`);
         dispatchConnections({
           type: "add",
           payload: {
@@ -185,11 +244,12 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
       });
       // then listen for new data from those peers.
       conn.on("data", (data) => {
-        console.log("got data over connection ", conn.peer, data);
+        console.debug(`usePeer RTCEvent(data): ${conn.peer}`, data);
         listeners.forEach((f) => f(data));
       });
       // if the connection closes, remove it.
       conn.on("close", () => {
+        console.debug(`usePeer RTCEvent(close): ${conn.peer}`);
         dispatchConnections({
           type: "remove",
           payload: {
@@ -200,61 +260,31 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
       });
       // if the connection closes, remove it.
       conn.on("error", (err) => {
-        console.warn("RTC Error on connection:", id, err);
+        console.warn(`usePeer RTCEvent(error): ${conn.peer}`, err);
       });
     };
 
     if (id === host) {
-      console.log("I am the host.");
+      console.debug("I am the host. Listening for new connections.");
       // first, listen for new connections from other peers
       peer.on("connection", onConnection);
     } else {
-      console.log("attempting to connect to host");
-      const hc = peer.connect(host, {
-        reliable: true,
-        metadata: { clientId: peer.id, host },
-      });
-      hc.on("open", () => {
-        dispatchConnections({
-          type: "add",
-          payload: {
-            ref: hc,
-            id: host,
-          },
-        });
-        // say hello from me.
-        console.log("sending hello to ", host);
-        hc.send({
-          clientId: id,
-          type: "hello",
-          message: "hello!",
-        });
-      });
-      hc.on("data", (data: any) => {
-        listeners.forEach((f) => f(data));
-      });
-      // there needs to be some sort of reconnect logic where it
-      // tries to always have a host connection open.
-      hc.on("close", () => {
-        console.log("dropped connection to host ", host);
-        dispatchConnections({
-          type: "remove",
-          payload: {
-            ref: hc,
-            id: host,
-          },
-        });
-      });
+      connectToHost();
     }
     // TODO: add this logic to window.onunload as well
-    return () => {
-      console.log("cleaning up all connections and handlers");
+    const cleanUp = () => {
+      console.debug("cleaning up all connections and handlers");
       peer.off("connection", onConnection);
 
       // do we need to disconnect other peers?
       Object.entries(connections).forEach(([id, connection]) => {
         connection.close();
       });
+    };
+    window.addEventListener("beforeunload", cleanUp);
+    return () => {
+      cleanUp();
+      window.removeEventListener("beforeunload", cleanUp);
     };
   }, [connected, /*reconnectAttempt, */ host]);
 

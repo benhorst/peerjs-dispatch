@@ -28,7 +28,12 @@ export const PlayerConnectionReadout = () => {
     <pre style={{ maxHeight: "500px", overflowY: "auto", overflowX: "auto" }}>
       connected: {state.connected} / host: {state.host}
       <br />
-      connections: {Object.keys(state.connections).join(", ")}
+      connections:{" "}
+      {Object.entries(state.connections).map(([id, conn]) => (
+        <span key={id}>
+          {id} <button onClick={() => conn.close()}>close</button>
+        </span>
+      ))}
     </pre>
   );
 };
@@ -128,8 +133,14 @@ export const GameStateSyncProvider = <T extends GameStateObject, A>({
       });
     }
   };
+
+  // whenever gameState or the connection list changes,
+  // send a fresh update to all peers (only if host!)
   useEffect(() => {
     if (host === peerId) {
+      console.debug(
+        "GameState or Connection change. Sending host gamestate update to all peers"
+      );
       broadcast({
         type: "gamestate.update",
         action: {
@@ -143,7 +154,7 @@ export const GameStateSyncProvider = <T extends GameStateObject, A>({
   const peerListener = (message: PeerMessage) => {
     if (message.type === "gamestate.update") {
       console.log("received game state update from peer ", message);
-      externalDispatch(message.action);
+      dispatchGameState(message.action);
     } else if (message.type === "hello") {
       console.log("just saying hello from: ", message.clientId);
       broadcast({
