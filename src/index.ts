@@ -1,1 +1,1 @@
-export * from "hooks/useGameState";
+export * from "hooks/useSyncReducer";
