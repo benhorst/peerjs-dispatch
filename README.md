@@ -6,7 +6,7 @@ A method of sharing state via host+peers and dispatch
 
 This implementation relies on the peerjs free server, as defined by the `peerjs` lib. https://peerjs.com/peerserver.html
 
-At this time, the options to configure a different peer server are not tested nor supported. If you are interested in this, please open an issue or submit a PR.
+At this time, the options to configure a different peer server are not tested nor supported. If you are interested in this, please open a PR or see Issue #1.
 
 ## Usage
 
