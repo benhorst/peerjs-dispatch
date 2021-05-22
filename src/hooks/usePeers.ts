@@ -138,10 +138,15 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
         clientId: id,
         type: "hello",
         message: "hello!",
+        timestamp: new Date().toISOString(),
       });
     });
     hc.on("data", (data: any) => {
       console.debug(`usePeer RTCEvent(data)`, data);
+      console.debug(
+        `usePeer RTCEvent(data) latency: `,
+        Date.now() - new Date(data.timestamp).getTime()
+      );
       listeners.forEach((f) => f(data));
     });
     // there needs to be some sort of reconnect logic where it
@@ -195,7 +200,7 @@ export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
         console.log("not rebroadcasting message to sender: ", id);
       } else {
         console.log("sending message to: ", id, payload);
-        connection.send(payload);
+        connection.send({ ...payload, timestamp: new Date().toISOString() });
       }
     });
   };

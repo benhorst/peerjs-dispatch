@@ -83,11 +83,13 @@ type SyncStateReducerAction<
   type: string;
   hostDispatch?: boolean;
   payload: P;
+  timestamp: string;
 };
 
 type PeerMessage = {
   type: "syncstate.update" | "hello" | "info";
   clientId?: string;
+  timestamp: string;
   action: {
     type: string;
     payload: any;
@@ -130,6 +132,7 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
       broadcast({
         type: "syncstate.update",
         action,
+        timestamp: action.timestamp,
       });
     }
   };
@@ -137,6 +140,9 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
   // whenever syncState or the connection list changes,
   // send a fresh update to all peers (only if host!)
   useEffect(() => {
+    // TODO: this is all well and good but it would be nice to know which
+    // peer was the one to cause the state change.
+    // one reason is that we'd like to know pingback times to measure latency
     if (host === peerId) {
       console.debug(
         "SyncState or Connection change. Sending host syncstate update to all peers"
@@ -154,11 +160,12 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
   const peerListener = (message: PeerMessage) => {
     if (message.type === "syncstate.update") {
       console.log("received sync state update from peer ", message);
-      dispatchSyncState(message.action);
+      dispatchSyncState({ ...message.action, timestamp: message.timestamp });
     } else if (message.type === "hello") {
       console.log("just saying hello from: ", message.clientId);
       broadcast({
         type: "syncstate.update",
+        timestamp: message.timestamp,
         action: {
           type: "host.update",
           payload: syncState,

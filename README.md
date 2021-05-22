@@ -1,6 +1,8 @@
 # peerjs-dispatch
 
-A method of sharing state via host+peers and dispatch
+A method of sharing state with peers a la `useReducer`. Peerjs allows for WebRTC-based peer-to-peer communication that lowers latency and has high reliability. If you're looking for a library to help you write React code that syncs state to multiple peers without incurring server costs or latency, this is for you!
+
+This is a good fit for turn-based games and any shared state that has an interaction rate under 10 actions per second shared amongst all connected peers.
 
 ## Prerequisites
 
@@ -9,6 +11,18 @@ This implementation relies on the peerjs free server, as defined by the `peerjs`
 At this time, the options to configure a different peer server are not tested nor supported. If you are interested in this, please open a PR or see Issue #1.
 
 ## Usage
+
+### Add the Package
+
+To use our registry:
+`echo "@benhorst:registry=https://npm.pkg.github.com" >> .npmrc`
+
+Then install the package:
+`npm install @benhorst/peerjs-dispatch` or `yarn add @benhorst/peerjs-dispatch`
+
+### Implement in your Code
+
+You'll need to create a Reducer that drives your state. You'll want to add that to a Provider so the rest of your code can get at the state and allow it to dispatch actions. When you do this, we set up and manage a connection to the host for you!
 
 ```jsx
 // if you have a complex reducer, consider using `immer` to `produce` your new state.
@@ -55,6 +69,8 @@ const { userId } = session;
   <ASimpleComponent />
 </SyncReducerProvider>;
 ```
+
+Once you have a Provider at the top level that manages your connection, state changes, etc, you can go implement components that use state and dispatch actions.
 
 ```jsx
 // this component must be inside a <SyncStateProvider /> node
