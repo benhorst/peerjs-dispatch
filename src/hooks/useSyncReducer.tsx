@@ -7,6 +7,7 @@ import React, {
   useContext,
 } from "react";
 import { usePeers } from "./usePeers";
+const sanitizeId = (idString: string) => idString.replace(/[^A-Za-z0-9]/g, "");
 
 export const SyncStateContext = createContext({});
 export const SyncDispatchContext = createContext({});
@@ -108,15 +109,21 @@ type SyncReducerProviderProps<T extends SyncStateObject> = {
 
 export const SyncReducerProvider = <T extends SyncStateObject, A>({
   stateId,
-  peerId,
+  peerId: peerIdIn,
   value,
   // getState,
   stateReducers,
   ...props
 }: SyncReducerProviderProps<T>) => {
   // critically, there needs to be an initial value provided here.
-  const { host } = value;
+  // any case in which we accept values from external, we should sanitize the IDs.
+  // peerjs can only handle certain characters in identifiers.
+  const { host: hostIn } = value;
+  const host = sanitizeId(hostIn);
+
   const { client: clientReducer, host: hostReducer } = stateReducers;
+
+  const peerId = sanitizeId(peerIdIn);
   const theReducer = host === peerId ? hostReducer : clientReducer;
 
   const [syncState, dispatchSyncState] = useReducer(theReducer, value);
