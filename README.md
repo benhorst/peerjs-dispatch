@@ -14,9 +14,15 @@ At this time, the options to configure a different peer server are not tested no
 
 ### Add the Package
 
-To use our registry:
+To use our registry, you'll need to set the @benhorst registry default and [add a Personal Access Token](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-with-a-personal-access-token):
+
 `echo "@benhorst:registry=https://npm.pkg.github.com" >> .npmrc`
 
+`echo "//npm.pkg.github.com/:_authToken=TOKEN" >> .npmrc` (replacing the TOKEN part)
+
+Note that the PAT *MUST* have 'read:packages' scope.
+
+---
 Then install the package:
 `npm install @benhorst/peerjs-dispatch` or `yarn add @benhorst/peerjs-dispatch`
 
