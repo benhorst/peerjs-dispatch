@@ -6,7 +6,7 @@ import React, {
   createContext,
   useContext,
 } from "react";
-import { usePeers } from "./usePeers";
+import { usePeers, PeerConnectionOptions } from "./usePeers";
 const sanitizeId = (idString: string) => idString.replace(/[^A-Za-z0-9]/g, "");
 
 export const SyncStateContext = createContext({});
@@ -101,6 +101,7 @@ type SyncReducerProviderProps<T extends SyncStateObject> = {
   stateId: string; // the state we want to track/register for (getState retrieves this)
   peerId: string; // my id in the world, can be used visibly to id me in peers
   // getState: (id: string) => Promise<T>; // async function to get state from scratch
+  connectionOptions?: PeerConnectionOptions; // the PeerJS options for connecting to a Stun/Turn server
   stateReducers: {
     client: Reducer<T, SyncStateReducerAction>;
     host: Reducer<T, SyncStateReducerAction>;
@@ -111,6 +112,7 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
   stateId,
   peerId: peerIdIn,
   value,
+  connectionOptions,
   // getState,
   stateReducers,
   ...props
@@ -128,7 +130,7 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
 
   const [syncState, dispatchSyncState] = useReducer(theReducer, value);
   const { connected, broadcast, addListener, removeListener, connections } =
-    usePeers(peerId, host);
+    usePeers(peerId, host, connectionOptions || {});
 
   // a dispatch to give to consumers
   const externalDispatch = (action: SyncStateReducerAction) => {

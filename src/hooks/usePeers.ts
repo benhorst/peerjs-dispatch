@@ -35,6 +35,16 @@ interface DataConnection {
   stringify: (data: any) => string;
   parse: (data: string) => any;
 }
+export type PeerConnectionOptions = Partial<{
+  key: string;
+  host: string;
+  port: number;
+  path: string;
+  pingInterval: number;
+  secure: boolean;
+  config: Record<string, any>; // custom ICE/TURN server config
+  debug: number;
+}>;
 
 const getPeerLibrary = async () => {
   let peerRef: any = MockPeerModule;
@@ -87,13 +97,13 @@ const connectionReducer: ConnectionMapReducer = produce((state, action) => {
   return;
 });
 
-export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST) => {
+export const usePeers = (myPeerId: string, hostIn: string = DEFAULT_HOST, options: PeerConnectionOptions = {}) => {
   const id = sanitizeId(myPeerId);
   const [peer, setPeer] = useState<any>(null);
   useEffect(() => {
     (async () => {
       const Peer = await getPeerLibrary();
-      const peerRef = new Peer(id);
+      const peerRef = new Peer(id, options);
       setPeer(peerRef);
     })();
   }, [id]);
