@@ -89,6 +89,7 @@ type SyncStateReducerAction<
 
 type PeerMessage = {
   type: "syncstate.update" | "hello" | "info";
+  channel: string;
   clientId?: string;
   timestamp: string;
   action: {
@@ -140,6 +141,7 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
     if (host !== peerId) {
       broadcast({
         type: "syncstate.update",
+        channel: stateId,
         action,
         timestamp: action.timestamp,
       });
@@ -158,6 +160,7 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
       );
       broadcast({
         type: "syncstate.update",
+        channel: stateId,
         action: {
           type: "host.update",
           payload: syncState,
@@ -167,6 +170,8 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
   }, [syncState, connections]);
 
   const peerListener = (message: PeerMessage) => {
+    // only pay attention to messages on this stateId/channel
+    if (message.channel !== stateId) return;
     if (message.type === "syncstate.update") {
       console.log("received sync state update from peer ", message);
       dispatchSyncState({ ...message.action, timestamp: message.timestamp });
@@ -175,6 +180,7 @@ export const SyncReducerProvider = <T extends SyncStateObject, A>({
       broadcast({
         type: "syncstate.update",
         timestamp: message.timestamp,
+        channel: stateId,
         action: {
           type: "host.update",
           payload: syncState,
